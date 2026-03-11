@@ -14,10 +14,10 @@ export default function Home() {
         ) : (
           <div className="mt-24 text-center">
             <h1 className="text-2xl font-semibold text-zinc-800">
-              Please sign in or sign up to continue
+              Log in or register to keep going
             </h1>
             <p className="mt-2 text-sm text-zinc-500">
-              Create an account or sign in to generate your quiz.
+              Sign up or log in to build your quiz.
             </p>
           </div>
         )}
