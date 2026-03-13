@@ -20,6 +20,57 @@ export default function MainPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const persistHistory = (extras?: {
+    title?: string;
+    summary?: string;
+    questions?: Question[];
+    score?: number;
+    total?: number;
+    selectedAnswers?: number[];
+  }) => {
+    if (typeof window === "undefined") return;
+    const baseTitle = extras?.title ?? title;
+    const baseSummary = extras?.summary ?? summary;
+    const baseQuestions = extras?.questions ?? questions;
+    if (!baseTitle || baseQuestions.length === 0) return;
+    try {
+      const raw = localStorage.getItem("history");
+      const existing = raw ? (JSON.parse(raw) as any[]) : [];
+      const next = Array.isArray(existing) ? existing : [];
+      const questionsKey = JSON.stringify(baseQuestions);
+      const matchIndex = next.findIndex(
+        (item) =>
+          item?.title === baseTitle &&
+          (item?.summary ?? "") === (baseSummary ?? "") &&
+          JSON.stringify(item?.questions ?? []) === questionsKey,
+      );
+
+      const entry = {
+        id:
+          matchIndex >= 0
+            ? next[matchIndex]?.id
+            : typeof crypto !== "undefined" && "randomUUID" in crypto
+              ? crypto.randomUUID()
+              : `${Date.now()}`,
+        title: baseTitle,
+        summary: baseSummary,
+        questions: baseQuestions,
+        ...extras,
+      };
+
+      if (matchIndex >= 0) {
+        next[matchIndex] = { ...next[matchIndex], ...entry };
+      } else {
+        next.unshift(entry);
+      }
+
+      localStorage.setItem("history", JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent("history-update"));
+    } catch (storageError) {
+      console.error("Failed to save history", storageError);
+    }
+  };
+
   const resetForm = () => {
     setTitle("");
     setContent("");
@@ -30,6 +81,18 @@ export default function MainPage() {
     setShowResults(false);
     setError("");
     setView("form");
+  };
+
+  const saveAndLeave = () => {
+    const score = questions.filter(
+      (q, i) => selectedAnswers[i] === q.correctIndex,
+    ).length;
+    persistHistory({
+      score,
+      total: questions.length,
+      selectedAnswers,
+    });
+    resetForm();
   };
 
   const loadFromHistory = () => {
@@ -88,29 +151,12 @@ export default function MainPage() {
         setShowResults(false);
         setView("summary");
 
-        if (typeof window !== "undefined") {
-          try {
-            const raw = localStorage.getItem("history");
-            const existing = raw ? (JSON.parse(raw) as any[]) : [];
-            const next = Array.isArray(existing) ? existing : [];
-            const id =
-              typeof crypto !== "undefined" && "randomUUID" in crypto
-                ? crypto.randomUUID()
-                : `${Date.now()}`;
-
-            next.unshift({
-              id,
-              title,
-              summary: response.data.summary,
-              questions: response.data.questions,
-            });
-
-            localStorage.setItem("history", JSON.stringify(next));
-            window.dispatchEvent(new CustomEvent("history-update"));
-          } catch (storageError) {
-            console.error("Failed to save history", storageError);
-          }
-        }
+        persistHistory({
+          title,
+          summary: response.data.summary,
+          questions: response.data.questions,
+          total: response.data.questions.length,
+        });
       }
     } catch (err) {
       console.error(err);
@@ -338,7 +384,7 @@ export default function MainPage() {
                 <Button variant="outline" onClick={resetForm}>
                   Restart quiz
                 </Button>
-                <Button onClick={resetForm}>Save & Leave</Button>
+                <Button onClick={saveAndLeave}>Save & Leave</Button>
               </div>
             </div>
           )}
